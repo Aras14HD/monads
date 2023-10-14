@@ -1,6 +1,22 @@
 trait Run<W> {
     type Wrapper<T>;
     fn run<T, F: FnOnce(W) -> Self::Wrapper<T>>(self, f: F) -> Self::Wrapper<T>;
+    fn run_lazy<T, F: FnOnce(W) -> Self::Wrapper<T> + 'static>(
+        self,
+        f: F,
+    ) -> Box<dyn FnOnce() -> Self::Wrapper<T>>
+    where
+        Self: Sized + 'static,
+    {
+        Box::new(|| self.run(f))
+    }
+}
+
+impl<T: Run<W>, W> Run<W> for Box<dyn FnOnce() -> T> {
+    type Wrapper<U> = T::Wrapper<U>;
+    fn run<U, F: FnOnce(W) -> Self::Wrapper<U>>(self, f: F) -> Self::Wrapper<U> {
+        self().run(f)
+    }
 }
 
 trait RunTrivial<W>: Run<W> {
@@ -13,6 +29,21 @@ trait RunTrivial<W>: Run<W> {
         self.run_triv(|x| x.run(f))
     }
 }
+
+// trait RunTwo<W, V> {
+//     type Wrapper<T>;
+//     fn run<T, F: FnOnce(W, V) -> Self::Wrapper<T>>(self, f: F) -> Self::Wrapper<T>;
+// }
+
+// Can't check wether the wrapper is the same!
+
+// impl<A, B, X: Run<A>, Y: Run<B, Wrapper<U> = X::Wrapper<U>>> RunTwo<A, B> for (X, Y) {
+//     type Wrapper<T> = X::Wrapper<T>;
+//     fn run<T, F: FnOnce(X, Y) -> Self::Wrapper<T>>(self, f: F) -> Self::Wrapper<T> {
+//         let (x, y) = self;
+//         run_both(x, y, f)
+//     }
+// }
 
 impl<W> Run<W> for Option<W> {
     type Wrapper<T> = Option<T>;
@@ -93,7 +124,7 @@ fn run_both<
     Y,
     A: Run<X>,
     B: Run<Y, Wrapper<T> = A::Wrapper<T>>,
-    F: Fn(X, Y) -> B::Wrapper<T>,
+    F: FnOnce(X, Y) -> B::Wrapper<T>,
 >(
     a: A,
     b: B,
@@ -108,7 +139,7 @@ fn run_both_triv<
     Y,
     A: Run<X>,
     B: Run<Y, Wrapper<T> = A::Wrapper<T>> + RunTrivial<Y>,
-    F: Fn(X, Y) -> T,
+    F: FnOnce(X, Y) -> T,
 >(
     a: A,
     b: B,
@@ -117,16 +148,23 @@ fn run_both_triv<
     a.run(|x| b.run_triv::<T, _>(|y| f(x, y)))
 }
 
+fn lazy<T, U, F: FnOnce(T) -> U>(v: T, f: F) -> impl FnOnce() -> U {
+    || f(v)
+}
+
 fn main() {
     let x = maybe(5).run(maybe);
     let y = maybe(WithLog::new(5))
         .run_inner(incr_log)
         .run_inner(incr_log);
-    let add = |x, y: u16| x + y as i32;
+    let add = |x: i32, y: u16| x + y as i32;
     let a = Some(3);
+    // let a = None;
     let b = Some(5);
     let res = run_both_triv(a, b, add);
+    let z = res.run_lazy(maybe).run_lazy(maybe)();
     println!("x: {:?}", x);
     println!("y: {:?}", y);
+    println!("z: {:?}", z);
     println!("res: {:?}", res);
 }
