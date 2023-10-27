@@ -30,20 +30,44 @@ trait RunTrivial<W>: Run<W> {
     }
 }
 
-// trait RunTwo<W, V> {
-//     type Wrapper<T>;
-//     fn run<T, F: FnOnce(W, V) -> Self::Wrapper<T>>(self, f: F) -> Self::Wrapper<T>;
-// }
+trait RunTwo<W, V, U> {
+    type Wrapper<T>;
+    fn run<F: FnOnce(W, V) -> Self::Wrapper<U>>(self, f: F) -> Self::Wrapper<U>;
+    fn run_lazy<F: FnOnce(W, V) -> Self::Wrapper<U> + 'static>(
+        self,
+        f: F,
+    ) -> Box<dyn FnOnce() -> Self::Wrapper<U>>
+    where
+        Self: Sized + 'static,
+    {
+        Box::new(|| self.run(f))
+    }
+}
 
-// Can't check wether the wrapper is the same!
-
-// impl<A, B, X: Run<A>, Y: Run<B, Wrapper<U> = X::Wrapper<U>>> RunTwo<A, B> for (X, Y) {
-//     type Wrapper<T> = X::Wrapper<T>;
-//     fn run<T, F: FnOnce(X, Y) -> Self::Wrapper<T>>(self, f: F) -> Self::Wrapper<T> {
-//         let (x, y) = self;
-//         run_both(x, y, f)
+// trait RunTwoTrivial<W, V, U>: RunTwo<W, V, U> {
+//     fn run_triv<F: FnOnce(W, V) -> U>(self, f: F) -> Self::Wrapper<U>;
+//     fn run_inner<T, Q, R, F: FnOnce(W, V) -> <(W, V) as RunTwo<W, V, R>>::Wrapper<R>>(
+//         self,
+//         f: F,
+//     ) -> Self::Wrapper<<(W, V) as RunTwo<W, V, R>>::Wrapper<R>>
+//     where
+//         (W, V): RunTwo<T, Q, R>,
+//         U = (W, V),
+//         W: Run<W>,
+//         V: Run<V, Wrapper<R> = W::Wrapper<R>>,
+//         Self: Sized,
+//     {
+//         self.run_triv(|x, y| (x, y).run(f))
 //     }
 // }
+
+impl<U, A, B, X: Run<A>, Y: Run<B, Wrapper<U> = X::Wrapper<U>>> RunTwo<A, B, U> for (X, Y) {
+    type Wrapper<T> = X::Wrapper<T>;
+    fn run<F: FnOnce(A, B) -> Self::Wrapper<U>>(self, f: F) -> Self::Wrapper<U> {
+        let (x, y) = self;
+        x.run(|a| y.run::<U, _>(|b| f(a, b)))
+    }
+}
 
 impl<W> Run<W> for Option<W> {
     type Wrapper<T> = Option<T>;
@@ -161,7 +185,7 @@ fn main() {
     let a = Some(3);
     // let a = None;
     let b = Some(5);
-    let res = run_both_triv(a, b, add);
+    let res = (a, b).run(|a, b| Some(add(a, b)));
     let z = res.run_lazy(maybe).run_lazy(maybe)();
     println!("x: {:?}", x);
     println!("y: {:?}", y);
