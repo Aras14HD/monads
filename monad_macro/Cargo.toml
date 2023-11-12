@@ -1,11 +1,12 @@
-workspace = { members = ["monad_macro"] }
 [package]
-name = "monads"
+name = "monad_macro"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+proc-macro = true
 
 [dependencies]
-rand = "0.8.5"
-monad_macro = { path = "./monad_macro" }
+quote = "1.0.33"
+syn = "2.0.39"

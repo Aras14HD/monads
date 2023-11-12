@@ -1,4 +1,7 @@
-trait Run<W> {
+#![feature(unboxed_closures, tuple_trait)]
+use std::marker::Tuple;
+use monad_macro::impl_run_tuple;
+pub trait Run<W> {
     type Wrapper<T>;
     fn run<T, F: FnOnce(W) -> Self::Wrapper<T>>(self, f: F) -> Self::Wrapper<T>;
     fn run_lazy<T, F: FnOnce(W) -> Self::Wrapper<T> + 'static>(
@@ -19,7 +22,7 @@ impl<T: Run<W>, W> Run<W> for Box<dyn FnOnce() -> T> {
     }
 }
 
-trait RunTrivial<W>: Run<W> {
+pub trait RunTrivial<W>: Run<W> {
     fn run_triv<T, F: FnOnce(W) -> T>(self, f: F) -> Self::Wrapper<T>;
     fn run_inner<T, U, F: FnOnce(U) -> W::Wrapper<T>>(self, f: F) -> Self::Wrapper<W::Wrapper<T>>
     where
@@ -30,10 +33,23 @@ trait RunTrivial<W>: Run<W> {
     }
 }
 
-trait RunTwo<W, V, U> {
+// pub trait RunTwo<W, V, U> {
+//     type Wrapper<T>;
+//     fn run<F: FnOnce(W, V) -> Self::Wrapper<U>>(self, f: F) -> Self::Wrapper<U>;
+//     fn run_lazy<F: FnOnce(W, V) -> Self::Wrapper<U> + 'static>(
+//         self,
+//         f: F,
+//     ) -> Box<dyn FnOnce() -> Self::Wrapper<U>>
+//     where
+//         Self: Sized + 'static,
+//     {
+//         Box::new(|| self.run(f))
+//     }
+// }
+pub trait RunTuple<W: Tuple, U> {
     type Wrapper<T>;
-    fn run<F: FnOnce(W, V) -> Self::Wrapper<U>>(self, f: F) -> Self::Wrapper<U>;
-    fn run_lazy<F: FnOnce(W, V) -> Self::Wrapper<U> + 'static>(
+    fn run<F: FnOnce<W, Output = Self::Wrapper<U>>>(self, f: F) -> Self::Wrapper<U>;
+    fn run_lazy<F: FnOnce<W, Output = Self::Wrapper<U>> + 'static>(
         self,
         f: F,
     ) -> Box<dyn FnOnce() -> Self::Wrapper<U>>
@@ -43,6 +59,20 @@ trait RunTwo<W, V, U> {
         Box::new(|| self.run(f))
     }
 }
+
+// Macro needed to generate impls
+impl_run_tuple!();
+impl_run_tuple!(B);
+impl_run_tuple!(B, C);
+impl_run_tuple!(B, C, D);
+impl_run_tuple!(B, C, D, E);
+impl_run_tuple!(B, C, D, E, F);
+impl_run_tuple!(B, C, D, E, F, G);
+impl_run_tuple!(B, C, D, E, F, G, H);
+impl_run_tuple!(B, C, D, E, F, G, H, I);
+impl_run_tuple!(B, C, D, E, F, G, H, I, J);
+impl_run_tuple!(B, C, D, E, F, G, H, I, J, K);
+impl_run_tuple!(B, C, D, E, F, G, H, I, J, K, L);
 
 // trait RunTwoTrivial<W, V, U>: RunTwo<W, V, U> {
 //     fn run_triv<F: FnOnce(W, V) -> U>(self, f: F) -> Self::Wrapper<U>;
@@ -61,13 +91,13 @@ trait RunTwo<W, V, U> {
 //     }
 // }
 
-impl<U, A, B, X: Run<A>, Y: Run<B, Wrapper<U> = X::Wrapper<U>>> RunTwo<A, B, U> for (X, Y) {
-    type Wrapper<T> = X::Wrapper<T>;
-    fn run<F: FnOnce(A, B) -> Self::Wrapper<U>>(self, f: F) -> Self::Wrapper<U> {
-        let (x, y) = self;
-        x.run(|a| y.run::<U, _>(|b| f(a, b)))
-    }
-}
+// impl<U, A, B, X: Run<A>, Y: Run<B, Wrapper<U> = X::Wrapper<U>>> RunTwo<A, B, U> for (X, Y) {
+//     type Wrapper<T> = X::Wrapper<T>;
+//     fn run<F: FnOnce(A, B) -> Self::Wrapper<U>>(self, f: F) -> Self::Wrapper<U> {
+//         let (x, y) = self;
+//         x.run(|a| y.run::<U, _>(|b| f(a, b)))
+//     }
+// }
 
 impl<W> Run<W> for Option<W> {
     type Wrapper<T> = Option<T>;
