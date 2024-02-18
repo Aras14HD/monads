@@ -28,16 +28,16 @@ pub trait Run<W> {
     fn run_lazy<T, F: FnOnce(W) -> Self::Wrapper<T> + 'static>(
         self,
         f: F,
-    ) -> Box<dyn FnOnce() -> Self::Wrapper<T>>
+    ) -> impl FnOnce() -> Self::Wrapper<T>
     where
         Self: Sized + 'static,
     {
-        Box::new(|| self.run(f))
+        || self.run(f)
     }
 }
 
 /// Implement Run for all closures that just return a Run (eg run_lazy)
-impl<T: Run<W>, W> Run<W> for Box<dyn FnOnce() -> T> {
+impl<T: Run<W>, Func: FnOnce() -> T, W> Run<W> for Func {
     type Wrapper<U> = T::Wrapper<U>;
     fn run<U, F: FnOnce(W) -> Self::Wrapper<U>>(self, f: F) -> Self::Wrapper<U> {
         self().run(f)
