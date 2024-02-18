@@ -1,9 +1,30 @@
+//! This Crate implements a generic monad trait Run, that basically does .then/flatmap, a trait RunTrivial that implements .map, and a trait RunTuple that extends these to function with multiple arguments using tuples.
+//!
+//! ```rust
+//! (Some(5), Some(3)).run(|x,y| x.checked_add(y)).run_triv(|x| if x == 8 {Ok(x)} else {Err("wrong answer")}).run_inner(|x| x.checked_sub(1)).unwrap().run_lazy(|x| Some(x+1))() 
+//! ```
 #![feature(unboxed_closures, tuple_trait)]
 use std::marker::Tuple;
 use monad_macro::impl_run_tuple;
+
+/// The main Monad trait
+///
+/// ```rust
+/// assert!(Some(9).run(|x| if x > 5 {Some(x+1)} else {None}) == Some(10))
+/// ```
 pub trait Run<W> {
     type Wrapper<T>;
+    /// Possibly runs f with the inner type and/or returns some wrapped value.
+    ///
+    /// ```rust
+    /// Some(5).run(|x| x.checked_sub(1))
+    /// ```
     fn run<T, F: FnOnce(W) -> Self::Wrapper<T>>(self, f: F) -> Self::Wrapper<T>;
+    /// Returns a closure, that calls run when called. These closures can also be run.
+    ///
+    /// ```rust
+    /// x.run_lazy(f).run_lazy(g)()
+    /// ```
     fn run_lazy<T, F: FnOnce(W) -> Self::Wrapper<T> + 'static>(
         self,
         f: F,
@@ -15,6 +36,7 @@ pub trait Run<W> {
     }
 }
 
+/// Implement Run for all closures that just return a Run (eg run_lazy)
 impl<T: Run<W>, W> Run<W> for Box<dyn FnOnce() -> T> {
     type Wrapper<U> = T::Wrapper<U>;
     fn run<U, F: FnOnce(W) -> Self::Wrapper<U>>(self, f: F) -> Self::Wrapper<U> {
@@ -22,8 +44,19 @@ impl<T: Run<W>, W> Run<W> for Box<dyn FnOnce() -> T> {
     }
 }
 
+/// A trait that allows simpler functions to be called with Run
 pub trait RunTrivial<W>: Run<W> {
+    /// Like run, but automatically wrapps the result (like map)
+    ///
+    /// ```rust
+    /// Some(5).run_triv(|y| y+1)
+    /// ```
     fn run_triv<T, F: FnOnce(W) -> T>(self, f: F) -> Self::Wrapper<T>;
+    /// Run nested monads (where the outer implements RunTrivial)
+    ///
+    /// ```rust
+    /// Some(Ok(5)).run_inner(|x| x.checked_sub(1).ok_or("Underflow!"))
+    /// ``` 
     fn run_inner<T, U, F: FnOnce(U) -> W::Wrapper<T>>(self, f: F) -> Self::Wrapper<W::Wrapper<T>>
     where
         W: Run<U>,
@@ -46,9 +79,21 @@ pub trait RunTrivial<W>: Run<W> {
 //         Box::new(|| self.run(f))
 //     }
 // }
+
+/// Run monads with multiple compatible arguments (eg the same Wrapper)
 pub trait RunTuple<W: Tuple, U> {
     type Wrapper<T>;
+    /// Calls f with the inner types of self's field in order and/or returns some wrapped value
+    ///
+    /// ```rust
+    /// (Some(5), Some(6)).run(|x,y| x.checked_sub(y))
+    /// ```
     fn run<F: FnOnce<W, Output = Self::Wrapper<U>>>(self, f: F) -> Self::Wrapper<U>;
+    /// Like normal run_lazy but for functions with multiple arguments
+    ///
+    /// ```rust
+    /// (x,y).run_lazy(f).run_lazy(g)()
+    /// ```
     fn run_lazy<F: FnOnce<W, Output = Self::Wrapper<U>> + 'static>(
         self,
         f: F,
@@ -73,6 +118,12 @@ impl_run_tuple!(B, C, D, E, F, G, H, I);
 impl_run_tuple!(B, C, D, E, F, G, H, I, J);
 impl_run_tuple!(B, C, D, E, F, G, H, I, J, K);
 impl_run_tuple!(B, C, D, E, F, G, H, I, J, K, L);
+
+trait RunTupleTrivial<W: Tuple, U>: RunTuple<W, U> {
+    fn run_triv<F: FnOnce<W, Output =  U>>(self, f: F) -> Self::Wrapper<U>;
+}
+
+// TODO: RunTupleTrivial impls
 
 // trait RunTwoTrivial<W, V, U>: RunTwo<W, V, U> {
 //     fn run_triv<F: FnOnce(W, V) -> U>(self, f: F) -> Self::Wrapper<U>;
@@ -172,7 +223,8 @@ fn incr_log(x: i32) -> WithLog<i32> {
     }
 }
 
-fn run_both<
+/// Legacy implementation that led to RunTuple
+pub fn run_both<
     T,
     X,
     Y,
@@ -187,7 +239,8 @@ fn run_both<
     a.run(|x| b.run::<T, _>(|y| f(x, y)))
 }
 
-fn run_both_triv<
+/// Hopefully some day a legacy implementation to run_triv with multiple args
+pub fn run_both_triv<
     T,
     X,
     Y,
@@ -202,7 +255,8 @@ fn run_both_triv<
     a.run(|x| b.run_triv::<T, _>(|y| f(x, y)))
 }
 
-fn lazy<T, U, F: FnOnce(T) -> U>(v: T, f: F) -> impl FnOnce() -> U {
+/// Crates a closure that when called calls f(v)
+pub fn lazy<T, U, F: FnOnce(T) -> U>(v: T, f: F) -> impl FnOnce() -> U {
     || f(v)
 }
 
