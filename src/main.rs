@@ -119,12 +119,17 @@ impl_run_tuple!(B, C, D, E, F, G, H, I, J);
 impl_run_tuple!(B, C, D, E, F, G, H, I, J, K);
 impl_run_tuple!(B, C, D, E, F, G, H, I, J, K, L);
 
-trait RunTupleTrivial<W: Tuple, U>: RunTuple<W, U> {
+/// RunTriv but with multiple args
+pub trait RunTupleTrivial<W: Tuple, U>: RunTuple<W, U> {
+    /// Run a fuction with multiple args and automatically wrap it
+    ///
+    /// ```rust
+    /// (Some(5), Some(3)).run_triv(|x,y| x+y)
+    /// ```
     fn run_triv<F: FnOnce<W, Output =  U>>(self, f: F) -> Self::Wrapper<U>;
 }
 
-// TODO: RunTupleTrivial impls
-
+// Implementations for RunTupleTriv
 impl_run_tuple_trivial!();
 impl_run_tuple_trivial!(B);
 impl_run_tuple_trivial!(B, C);
