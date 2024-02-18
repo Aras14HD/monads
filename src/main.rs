@@ -5,7 +5,7 @@
 //! ```
 #![feature(unboxed_closures, tuple_trait)]
 use std::marker::Tuple;
-use monad_macro::impl_run_tuple;
+use monad_macro::{impl_run_tuple, impl_run_tuple_trivial};
 
 /// The main Monad trait
 ///
@@ -125,6 +125,19 @@ trait RunTupleTrivial<W: Tuple, U>: RunTuple<W, U> {
 
 // TODO: RunTupleTrivial impls
 
+impl_run_tuple_trivial!();
+impl_run_tuple_trivial!(B);
+impl_run_tuple_trivial!(B, C);
+impl_run_tuple_trivial!(B, C, D);
+impl_run_tuple_trivial!(B, C, D, E);
+impl_run_tuple_trivial!(B, C, D, E, F);
+impl_run_tuple_trivial!(B, C, D, E, F, G);
+impl_run_tuple_trivial!(B, C, D, E, F, G, H);
+impl_run_tuple_trivial!(B, C, D, E, F, G, H, I);
+impl_run_tuple_trivial!(B, C, D, E, F, G, H, I, J);
+impl_run_tuple_trivial!(B, C, D, E, F, G, H, I, J, K);
+impl_run_tuple_trivial!(B, C, D, E, F, G, H, I, J, K, L);
+
 // trait RunTwoTrivial<W, V, U>: RunTwo<W, V, U> {
 //     fn run_triv<F: FnOnce(W, V) -> U>(self, f: F) -> Self::Wrapper<U>;
 //     fn run_inner<T, Q, R, F: FnOnce(W, V) -> <(W, V) as RunTwo<W, V, R>>::Wrapper<R>>(
@@ -149,6 +162,19 @@ trait RunTupleTrivial<W: Tuple, U>: RunTuple<W, U> {
 //         x.run(|a| y.run::<U, _>(|b| f(a, b)))
 //     }
 // }
+
+impl<W> Run<W> for () {
+    type Wrapper<T> = ();
+    fn run<T, F: FnOnce(W) -> Self::Wrapper<T>>(self, _f: F) -> Self::Wrapper<T> {
+        ()
+    }
+}
+
+impl<W> RunTrivial<W> for () {
+    fn run_triv<T, F: FnOnce(W) -> T>(self, _f: F) -> Self::Wrapper<T> {
+        ()
+    }
+}
 
 impl<W> Run<W> for Option<W> {
     type Wrapper<T> = Option<T>;
@@ -269,7 +295,7 @@ fn main() {
     let a = Some(3);
     // let a = None;
     let b = Some(5);
-    let res = (a, b).run(|a, b| Some(add(a, b)));
+    let res = (a, b).run_triv(add);
     let z = res.run_lazy(maybe).run_lazy(maybe)();
     println!("x: {:?}", x);
     println!("y: {:?}", y);
