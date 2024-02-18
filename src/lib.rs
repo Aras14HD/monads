@@ -1,7 +1,13 @@
 //! This Crate implements a generic monad trait Run, that basically does .then/flatmap, a trait RunTrivial that implements .map, and a trait RunTuple that extends these to function with multiple arguments using tuples.
 //!
-//! ```rust
-//! (Some(5), Some(3)).run(|x,y| x.checked_add(y)).run_triv(|x| if x == 8 {Ok(x)} else {Err("wrong answer")}).run_inner(|x| x.checked_sub(1)).unwrap().run_lazy(|x| Some(x+1))() 
+//! ```
+//! use monads::*;
+//! assert!((Some(5 as i32), Some(3 as i32))
+//!     .run(|x,y| x.checked_add(y))                                // Some(8)
+//!     .run_triv(|x| if x == 8 {Ok(x)} else {Err("wrong answer")}) // Some(Ok(8))
+//!     .run_inner(|x| x.checked_sub(1).ok_or("Underflow!"))        // Some(Ok(7))
+//!     .unwrap().run_lazy(|x| Ok(x+1))()                           // Ok(8)
+//!     == Ok(8));
 //! ```
 #![feature(unboxed_closures, tuple_trait)]
 use std::marker::Tuple;
@@ -9,20 +15,23 @@ use monad_macro::{impl_run_tuple, impl_run_tuple_trivial};
 
 /// The main Monad trait
 ///
-/// ```rust
-/// assert!(Some(9).run(|x| if x > 5 {Some(x+1)} else {None}) == Some(10))
+/// ```
+/// use monads::Run;
+/// assert!(Some(9).run(|x| if x > 5 {Some(x+1)} else {None}) == Some(10));
 /// ```
 pub trait Run<W> {
     type Wrapper<T>;
     /// Possibly runs f with the inner type and/or returns some wrapped value.
     ///
-    /// ```rust
-    /// Some(5).run(|x| x.checked_sub(1))
+    /// ```
+    /// use monads::Run;
+    /// assert!(Some(5 as usize).run(|x| x.checked_sub(1)) == Some(4));
+    /// assert!(Some(0 as usize).run(|x| x.checked_sub(1)) == None);
     /// ```
     fn run<T, F: FnOnce(W) -> Self::Wrapper<T>>(self, f: F) -> Self::Wrapper<T>;
     /// Returns a closure, that calls run when called. These closures can also be run.
     ///
-    /// ```rust
+    /// ```ignore
     /// x.run_lazy(f).run_lazy(g)()
     /// ```
     fn run_lazy<T, F: FnOnce(W) -> Self::Wrapper<T> + 'static>(
@@ -48,14 +57,16 @@ impl<T: Run<W>, Func: FnOnce() -> T, W> Run<W> for Func {
 pub trait RunTrivial<W>: Run<W> {
     /// Like run, but automatically wrapps the result (like map)
     ///
-    /// ```rust
-    /// Some(5).run_triv(|y| y+1)
+    /// ```
+    /// use monads::RunTrivial;
+    /// assert!(Some(5).run_triv(|y| y+1) == Some(6));
     /// ```
     fn run_triv<T, F: FnOnce(W) -> T>(self, f: F) -> Self::Wrapper<T>;
     /// Run nested monads (where the outer implements RunTrivial)
     ///
-    /// ```rust
-    /// Some(Ok(5)).run_inner(|x| x.checked_sub(1).ok_or("Underflow!"))
+    /// ```
+    /// use monads::RunTrivial;
+    /// assert!(Some(Ok(5 as i32)).run_inner(|x| x.checked_sub(1).ok_or("Underflow!")) == Some(Ok(4)));
     /// ``` 
     fn run_inner<T, U, F: FnOnce(U) -> W::Wrapper<T>>(self, f: F) -> Self::Wrapper<W::Wrapper<T>>
     where
@@ -85,13 +96,14 @@ pub trait RunTuple<W: Tuple, U> {
     type Wrapper<T>;
     /// Calls f with the inner types of self's field in order and/or returns some wrapped value
     ///
-    /// ```rust
-    /// (Some(5), Some(6)).run(|x,y| x.checked_sub(y))
+    /// ```
+    /// use monads::RunTuple;
+    /// assert!((Some(5 as i32), Some(6)).run(|x,y| x.checked_sub(y)) == Some(-1));
     /// ```
     fn run<F: FnOnce<W, Output = Self::Wrapper<U>>>(self, f: F) -> Self::Wrapper<U>;
     /// Like normal run_lazy but for functions with multiple arguments
     ///
-    /// ```rust
+    /// ```ignore
     /// (x,y).run_lazy(f).run_lazy(g)()
     /// ```
     fn run_lazy<F: FnOnce<W, Output = Self::Wrapper<U>> + 'static>(
@@ -123,8 +135,9 @@ impl_run_tuple!(B, C, D, E, F, G, H, I, J, K, L);
 pub trait RunTupleTrivial<W: Tuple, U>: RunTuple<W, U> {
     /// Run a fuction with multiple args and automatically wrap it
     ///
-    /// ```rust
-    /// (Some(5), Some(3)).run_triv(|x,y| x+y)
+    /// ```
+    /// use monads::RunTupleTrivial;
+    /// assert!((Some(5), Some(3)).run_triv(|x,y| x+y) == Some(8));
     /// ```
     fn run_triv<F: FnOnce<W, Output =  U>>(self, f: F) -> Self::Wrapper<U>;
 }
@@ -214,13 +227,13 @@ impl<W, E> RunTrivial<W> for Result<W, E> {
 }
 
 #[derive(Debug)]
-struct WithLog<T> {
+pub struct WithLog<T> {
     v: T,
     log: String,
 }
 
 impl<T> WithLog<T> {
-    fn new(v: T) -> Self {
+    pub fn new(v: T) -> Self {
         Self {
             v,
             log: "".to_owned(),
@@ -239,15 +252,8 @@ impl<W> Run<W> for WithLog<W> {
     }
 }
 
-fn maybe<T>(x: T) -> Option<T> {
-    if rand::random() {
-        Some(x)
-    } else {
-        None
-    }
-}
 
-fn incr_log(x: i32) -> WithLog<i32> {
+pub fn incr_log(x: i32) -> WithLog<i32> {
     WithLog {
         v: x + 1,
         log: format!("Incremented {:?} ", x),
@@ -289,21 +295,4 @@ pub fn run_both_triv<
 /// Crates a closure that when called calls f(v)
 pub fn lazy<T, U, F: FnOnce(T) -> U>(v: T, f: F) -> impl FnOnce() -> U {
     || f(v)
-}
-
-fn main() {
-    let x = maybe(5).run(maybe);
-    let y = maybe(WithLog::new(5))
-        .run_inner(incr_log)
-        .run_inner(incr_log);
-    let add = |x: i32, y: u16| x + y as i32;
-    let a = Some(3);
-    // let a = None;
-    let b = Some(5);
-    let res = (a, b).run_triv(add);
-    let z = res.run_lazy(maybe).run_lazy(maybe)();
-    println!("x: {:?}", x);
-    println!("y: {:?}", y);
-    println!("z: {:?}", z);
-    println!("res: {:?}", res);
 }
