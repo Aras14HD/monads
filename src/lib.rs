@@ -9,9 +9,71 @@
 //!     .unwrap().run_lazy(|x| Ok(x+1))()                           // Ok(8)
 //!     == Ok(8));
 //! ```
-#![feature(unboxed_closures, tuple_trait)]
-use std::marker::Tuple;
+#![feature(unboxed_closures, tuple_trait, try_trait_v2, try_trait_v2_residual)]
+use std::{marker::{PhantomData, Tuple}, ops::{ControlFlow, FromResidual, Try}};
 use monad_macro::{impl_run_tuple, impl_run_tuple_trivial};
+
+// Rust effects are Monads.
+//
+// ```ignore
+// try {
+//    let x = 5;
+//    let y = 10;
+//    let z = f()?;
+//    x + y + z;
+// }
+// ```
+// and
+// ```ignore
+// async {
+//    let x = 5;
+//    let y = 10;
+//    let z = f().await;
+//    x + y + z
+// }
+// ```
+// can be represented as
+// ```ignore
+// M::start()
+//    .then(|_| {
+//        let x = 5;
+//        let y = 10;
+//        f().map(|z| (x,y,z,))
+//    })
+//    .map(|(x,y,z)| {
+//        let z = z;
+//        x + y + z
+//    })
+// ```
+// using the mock trait
+// ```ignore
+// trait Monad {
+//     type Inner;
+//     trait Group; // hypothetical trait alias
+//     fn then<M: Monad + Group>(self, f: impl FnOnce(Self::Inner) -> M) -> M;
+//     fn wrap<M: Monad + Group>(inner: I) -> impl Monad<Inner = I> + Group;
+//     fn start() -> impl Monad<Inner = ()> + Group {
+//         Self::wrap(())
+//     }
+//     fn map<M: Monad + Group>(self, f: impl FnOnce(Self::Inner) -> M::Inner) -> M {
+//         self.then(|x| Self::wrap(f(x)))
+//     }
+// }
+// ```
+// with implementations like
+// ```ignore
+// trait CompatibleTry<R>: Try + FromResidual<R> {}
+// impl<T: Try> Monad for T {
+//     type Inner = Try::Output;
+//     trait Group = CompatibleTry<T::Residual>;
+//     fn then<M: Monad + Group>(self, f: impl FnOnce(Inner) -> M) -> M {
+//         match self.branch() {
+//             ControlFlow::Continue(c) => f(c),
+//             ControlFlow::Break(b) => M::from_residual(b)
+//         }
+//     }
+//     fn wrap<I>(inner: I) -> impl Monad<Inner = I> + Group {
+//         
 
 /// The main Monad trait
 ///
