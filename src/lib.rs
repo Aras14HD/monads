@@ -9,9 +9,9 @@
 //!     .unwrap().run_lazy(|x| Ok(x+1))()                           // Ok(8)
 //!     == Ok(8));
 //! ```
-#![feature(unboxed_closures, tuple_trait, try_trait_v2, try_trait_v2_residual)]
-use std::{marker::{PhantomData, Tuple}, ops::{ControlFlow, FromResidual, Try}};
+#![feature(unboxed_closures, tuple_trait)]
 use monad_macro::{impl_run_tuple, impl_run_tuple_trivial};
+use std::marker::Tuple;
 
 // Rust effects are Monads.
 //
@@ -73,7 +73,7 @@ use monad_macro::{impl_run_tuple, impl_run_tuple_trivial};
 //         }
 //     }
 //     fn wrap<I>(inner: I) -> impl Monad<Inner = I> + Group {
-//         
+//
 
 /// The main Monad trait
 ///
@@ -129,7 +129,7 @@ pub trait RunTrivial<W>: Run<W> {
     /// ```
     /// use monads::RunTrivial;
     /// assert!(Some(Ok(5 as i32)).run_inner(|x| x.checked_sub(1).ok_or("Underflow!")) == Some(Ok(4)));
-    /// ``` 
+    /// ```
     fn run_inner<T, U, F: FnOnce(U) -> W::Wrapper<T>>(self, f: F) -> Self::Wrapper<W::Wrapper<T>>
     where
         W: Run<U>,
@@ -201,7 +201,7 @@ pub trait RunTupleTrivial<W: Tuple, U>: RunTuple<W, U> {
     /// use monads::RunTupleTrivial;
     /// assert!((Some(5), Some(3)).run_triv(|x,y| x+y) == Some(8));
     /// ```
-    fn run_triv<F: FnOnce<W, Output =  U>>(self, f: F) -> Self::Wrapper<U>;
+    fn run_triv<F: FnOnce<W, Output = U>>(self, f: F) -> Self::Wrapper<U>;
 }
 
 // Implementations for RunTupleTriv
@@ -245,15 +245,11 @@ impl_run_tuple_trivial!(B, C, D, E, F, G, H, I, J, K, L);
 
 impl<W> Run<W> for () {
     type Wrapper<T> = ();
-    fn run<T, F: FnOnce(W) -> Self::Wrapper<T>>(self, _f: F) -> Self::Wrapper<T> {
-        ()
-    }
+    fn run<T, F: FnOnce(W) -> Self::Wrapper<T>>(self, _f: F) -> Self::Wrapper<T> {}
 }
 
 impl<W> RunTrivial<W> for () {
-    fn run_triv<T, F: FnOnce(W) -> T>(self, _f: F) -> Self::Wrapper<T> {
-        ()
-    }
+    fn run_triv<T, F: FnOnce(W) -> T>(self, _f: F) -> Self::Wrapper<T> {}
 }
 
 impl<W> Run<W> for Option<W> {
@@ -313,7 +309,6 @@ impl<W> Run<W> for WithLog<W> {
         }
     }
 }
-
 
 pub fn incr_log(x: i32) -> WithLog<i32> {
     WithLog {
